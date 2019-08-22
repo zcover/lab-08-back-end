@@ -24,7 +24,7 @@ function Location(query, format, lat, lng) {
 app.get('/location', (request, response) => {
   const query = request.query.data; //request.query is part of the request (NewJohn's hand) and is a vector for questions. It lives in the URL, public info. Postal service of internet.
 
-  const urlToVisit = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GEOCODE_API}`;
+  const urlToVisit = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GEOCODE_API_KEY}`;
 
   superagent.get(urlToVisit).then(responseFromSuper => {
     console.log('stuff', responseFromSuper.body);
