@@ -67,10 +67,20 @@ Actual time needed to complete: 45 minutes
 ___
 ### 2 Heroku Deployment <br>
 
-Estimate of time needed to complete: 2 hours
+Estimate of time needed to complete: 2 minutes
 
-Start time: 0900
+Start time: 0952
 
-Finish time: 0945
+Finish time: 0958
 
-Actual time needed to complete: 45 minutes
+Actual time needed to complete: 6 minutes
+___
+### 3 database setup <br>
+
+Estimate of time needed to complete: later
+
+Start time: 1000
+
+Finish time: 0958
+
+Actual time needed to complete: 6 minutes

@@ -4,10 +4,18 @@
 const express = require('express');
 const cors = require('cors');
 const superagent = require('superagent');
-require('dotenv').config()
+require('dotenv').config();
+const pg = require('pg');
 
 const app = express();
 app.use(cors());
+
+//postgres client
+const client = new pg.Client(process.env.DATABASE_URL);
+client.connect();
+client.on('error', (error) => console.error(error));
+
+
 
 const PORT = process.env.PORT;
 
