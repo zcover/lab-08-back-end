@@ -19,13 +19,21 @@ client.on('error', (error) => console.error(error));
 
 const PORT = process.env.PORT;
 
-//Constructor for Location
+//Constructors
+
+//location
 function Location(query, format, lat, lng) {
   this.search_query = query;
   this.formatted_query = format;
   this.latitude = lat;
   this.longitude = lng;
 }
+//weather
+function Day (summary, time) {
+  this.forecast = summary;
+  this.time = new Date(time *1000).toDateString();
+}
+//
 
 // =========== TARGET LOCATION from API ===========
 
@@ -91,30 +99,52 @@ app.get('/weather', getWeather)
   // console.log(request);
 
   const localData = request.query.data;
-  const urlDarkSky = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${localData.latitude},${localData.longitude}`;
+  // console.log(localData);
+  
+  client.query(`SELECT * FROM weather WHERE search_query=$1`, [localData.search_query]).then(sqlResult => {
 
-  superagent.get(urlDarkSky).then(responseFromSuper => {
+  //found stuff in database
+    if(sqlResult.rowCount > 0){
+      console.log('found weather stuff in databse')
+      response.send(sqlResult.rows[0]);
+      console.log(sqlResult.rows);
 
-    const weatherData = responseFromSuper.body;
-    const eightDays = weatherData.daily.data;
+    }else {
+      console.log('did not find in database, googling now!');
 
-    const formattedDays = eightDays.map(day => new Day(day.summary, day.time)
-    );
+    const urlDarkSky = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${localData.latitude},${localData.longitude}`;
 
-    response.send(formattedDays)
-  }).catch(error => {
 
-    response.status(500).send(error.message);
-    console.error(error);
-  })
+    superagent.get(urlDarkSky).then(responseFromSuper => {
 
-  function Day (summary, time) {
-    this.forecast = summary;
-    this.time = new Date(time *1000).toDateString();
-  }
+      const weatherData = responseFromSuper.body;
+      const eightDays = weatherData.daily.data;
+      const formattedDays = eightDays.map(day => new Day(day.summary, day.time));
+
+      //forEach for each day
+    
+      formattedDays.forEach(day => {
+
+        const sqlQueryInsert = `INSERT INTO weather
+      (search_query, forecast, time)
+      VALUES
+      ($1, $2, $3)`;
+
+      const valuesArray = [localData.search_query, day.forecast, day.time];
+      client.query(sqlQueryInsert, valuesArray);
+      console.log('accessing values array', valuesArray);
+    })
+      
+
+      response.send(formattedDays)
+    }).catch(error => {
+      response.status(500).send(error.message);
+      console.error(error);
+    })
+  };
+
+  });
 }
-
-//doing a for each based on formattd days, since we are storing 8 days' worth of data
 
 
 
