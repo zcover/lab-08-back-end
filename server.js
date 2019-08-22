@@ -4,10 +4,18 @@
 const express = require('express');
 const cors = require('cors');
 const superagent = require('superagent');
-require('dotenv').config()
+require('dotenv').config();
+const pg = require('pg');
 
 const app = express();
 app.use(cors());
+
+//postgres client
+const client = new pg.Client(process.env.DATABASE_URL);
+client.connect();
+client.on('error', (error) => console.error(error));
+
+
 
 const PORT = process.env.PORT;
 
@@ -22,36 +30,65 @@ function Location(query, format, lat, lng) {
 // =========== TARGET LOCATION from API ===========
 
 app.get('/location', (request, response) => {
-  const query = request.query.data; //request.query is part of the request (NewJohn's hand) and is a vector for questions. It lives in the URL, public info. Postal service of internet.
+  const searchQuery = request.query.data; //request.query is part of the request (NewJohn's hand) and is a vector for questions. It lives in the URL, public info. Postal service of internet.
 
-  const urlToVisit = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GEOCODE_API_KEY}`;
+  client.query(`SELECT * FROM locations WHERE search_query=$1`, [searchQuery]).then(sqlResult => {
 
-  superagent.get(urlToVisit).then(responseFromSuper => {
-    console.log('stuff', responseFromSuper.body);
+    //if stuff:
+    if(sqlResult.rowCount >0){
+      console.log('Found data in database')
+      response.send(sqlResult.rows[0]);
+    } else {
+
+      console.log('nothing found in database, asking google')
+      const urlToVisit = `https://maps.googleapis.com/maps/api/geocode/json?address=${searchQuery}&key=${process.env.GEOCODE_API_KEY}`;
+      
+      superagent.get(urlToVisit).then(responseFromSuper => {
+
+        const geoData = responseFromSuper.body;
+        const specificGeoData = geoData.results[0];
+        
+        const formatted = specificGeoData.formatted_address;
+        const lat = specificGeoData.geometry.location.lat;
+        const lng = specificGeoData.geometry.location.lng;
+        
+        const newLocation = new Location(searchQuery, formatted, lat, lng);
+        //start the response cycle
+        
+        //Within superagent, creating placeholders so we can add information to database
+        
+        //action(insert) "into" where (values)
+        const sqlQueryInsert = `INSERT INTO locations
+        (search_query, formatted_query, latitude, longitude)
+        VALUES
+        ($1, $2, $3, $4)`;
+
+        const valuesArray = [newLocation.search_query, newLocation.formatted_query, newLocation.latitude, newLocation.longitude];
 
 
-    const geoData = responseFromSuper.body;
+        //sqlQueryInsert is the affore mentioned string, which is sql script(instructions)
+        //values Array is that array
+        //client.query combies the string and array, and per the string's instructions, creates rows, and then fills the rows with the array's contents
+        
+        client.query(sqlQueryInsert, valuesArray);
+        
+        response.send(newLocation);
 
-    const specificGeoData = geoData.results[0];
+      }).catch(error => {
+        response.status(500).send(error.message);
+        console.error(error);
+      })
 
-    const formatted = specificGeoData.formatted_address;
-    const lat = specificGeoData.geometry.location.lat;
-    const lng = specificGeoData.geometry.location.lng;
-
-    const newLocation = new Location(query, formatted, lat, lng);
-    //start the response cycle
-    response.send(newLocation);
-  }).catch(error => {
-    response.status(500).send(error.message);
-    console.error(error);
+    }      
   })
 })
 
-// =========== TARGET WEATHER from API ===========
-
-app.get('/weather', getWeather)
-
-function getWeather(request, response){
+    
+    // =========== TARGET WEATHER from API ===========
+    
+    app.get('/weather', getWeather)
+    
+    function getWeather(request, response){
   // console.log(request);
 
   const localData = request.query.data;
@@ -88,7 +125,7 @@ function getEvents(request, response){
   const urlfromEventbrite = `https://www.eventbriteapi.com/v3/events/search/?sort_by=date&location.latitude=${eventData.latitude}&location.longitude=${eventData.longitude}&token=${process.env.EVENTBRITE_API_KEY}`;
 
   superagent.get(urlfromEventbrite).then(responseFromSuper => {
-    console.log(responseFromSuper.body)
+    // console.log(responseFromSuper.body)
 
     const eventbriteData = responseFromSuper.body.events;
 
