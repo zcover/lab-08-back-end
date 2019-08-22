@@ -86,34 +86,40 @@ app.get('/location', (request, response) => {
     
     // =========== TARGET WEATHER from API ===========
     
-    app.get('/weather', getWeather)
-    
-    function getWeather(request, response){
+app.get('/weather', getWeather)
+  function getWeather(request, response){
   // console.log(request);
 
   const localData = request.query.data;
-
   const urlDarkSky = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${localData.latitude},${localData.longitude}`;
 
   superagent.get(urlDarkSky).then(responseFromSuper => {
 
     const weatherData = responseFromSuper.body;
-    // console.log('weather', weatherData);
-
     const eightDays = weatherData.daily.data;
 
     const formattedDays = eightDays.map(day => new Day(day.summary, day.time)
     );
+
     response.send(formattedDays)
   }).catch(error => {
+
     response.status(500).send(error.message);
     console.error(error);
   })
+
   function Day (summary, time) {
     this.forecast = summary;
     this.time = new Date(time *1000).toDateString();
   }
 }
+
+//doing a for each based on formattd days, since we are storing 8 days' worth of data
+
+
+
+
+
 // ============ EVENTBRITE from API ==============
 
 app.get('/events', getEvents)
