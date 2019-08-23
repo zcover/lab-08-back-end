@@ -1,5 +1,9 @@
 'use strict'
 
+
+
+//updated constructor function to have the time of right now.
+
 //require() is an import statement built into node.js - it reads complex files.
 const express = require('express');
 const cors = require('cors');
@@ -15,7 +19,10 @@ const client = new pg.Client(process.env.DATABASE_URL);
 client.connect();
 client.on('error', (error) => console.error(error));
 
-
+//global Variables
+const sqlS = {
+  locationInsert: `SELECT * FROM locations WHERE search_query=$1`
+}
 
 const PORT = process.env.PORT;
 
@@ -32,22 +39,47 @@ function Location(query, format, lat, lng) {
 function Day (summary, time) {
   this.forecast = summary;
   this.time = new Date(time *1000).toDateString();
+  this.created_at = Date.now();
 }
 //
+
+
+
+//==============HELPER FUNCTIONS==============
+
+function insertIntoLocationTable(newLocation){
+  //action(insert) "into" where (values)
+  //insert statement has stand-ins of $1, $2 etc for the values that need to go into a query
+const sqlQueryInsert = `INSERT INTO locations
+(search_query, formatted_query, latitude, longitude)
+VALUES
+($1, $2, $3, $4)`;
+//my array needs to have the same amount of things as the number of $1, $2, etc that I have.
+// $1 === newLocation.search_query
+const valuesArray = [newLocation.search_query, newLocation.formatted_query, newLocation.latitude, newLocation.longitude];
+
+
+//sqlQueryInsert is the affore mentioned string, which is sql script(instructions)
+//values Array is that array
+//client.query combies the string and array, and per the string's instructions, creates rows, and then fills the rows with the array's contents
+
+client.query(sqlQueryInsert, valuesArray);
+}
+
+
 
 // =========== TARGET LOCATION from API ===========
 
 app.get('/location', (request, response) => {
   const searchQuery = request.query.data; //request.query is part of the request (NewJohn's hand) and is a vector for questions. It lives in the URL, public info. Postal service of internet.
 
-  client.query(`SELECT * FROM locations WHERE search_query=$1`, [searchQuery]).then(sqlResult => {
+  client.query(sqlS.locationInsert, [searchQuery]).then(sqlResult => {
 
     //if stuff:
     if(sqlResult.rowCount >0){
       console.log('Found data in database')
       response.send(sqlResult.rows[0]);
     } else {
-
       console.log('nothing found in database, asking google')
       const urlToVisit = `https://maps.googleapis.com/maps/api/geocode/json?address=${searchQuery}&key=${process.env.GEOCODE_API_KEY}`;
       
@@ -65,20 +97,7 @@ app.get('/location', (request, response) => {
         
         //Within superagent, creating placeholders so we can add information to database
         
-        //action(insert) "into" where (values)
-        const sqlQueryInsert = `INSERT INTO locations
-        (search_query, formatted_query, latitude, longitude)
-        VALUES
-        ($1, $2, $3, $4)`;
-
-        const valuesArray = [newLocation.search_query, newLocation.formatted_query, newLocation.latitude, newLocation.longitude];
-
-
-        //sqlQueryInsert is the affore mentioned string, which is sql script(instructions)
-        //values Array is that array
-        //client.query combies the string and array, and per the string's instructions, creates rows, and then fills the rows with the array's contents
-        
-        client.query(sqlQueryInsert, valuesArray);
+        insertIntoLocationTable(newLocation);
         
         response.send(newLocation);
 
@@ -95,6 +114,12 @@ app.get('/location', (request, response) => {
     // =========== TARGET WEATHER from API ===========
     
 app.get('/weather', getWeather)
+  //does data exist
+  //is it too old? => new data
+  //if not => give to front end
+  //doesn't exist => get new data
+
+
   function getWeather(request, response){
   // console.log(request);
 
@@ -103,12 +128,26 @@ app.get('/weather', getWeather)
   
   client.query(`SELECT * FROM weather WHERE search_query=$1`, [localData.search_query]).then(sqlResult => {
 
-  //found stuff in database
-    if(sqlResult.rowCount > 0){
+
+    let notTooOld = true;
+    if(sqlResult.rowcount > 0){
+      const age = sqlResult.rows[0].created_at; //15000000
+      const ageInSeconds = (Date.now() - age) / 1000; //15000
+      console.log('age in seconds', notTooOld);
+    }
+
+    
+    //found stuff in database
+    if(sqlResult.rowCount > 0 && notTooOld){
+      //check if the existing code is old
+
+
       console.log('found weather stuff in databse')
       response.send(sqlResult.rows[0]);
-      console.log(sqlResult.rows);
+      // console.log(sqlResult.rows);
 
+
+    //didn't find stuff or too old 
     }else {
       console.log('did not find in database, googling now!');
 
@@ -126,13 +165,13 @@ app.get('/weather', getWeather)
       formattedDays.forEach(day => {
 
         const sqlQueryInsert = `INSERT INTO weather
-      (search_query, forecast, time)
+      (search_query, forecast, time, created_at)
       VALUES
-      ($1, $2, $3)`;
+      ($1, $2, $3, $4)`;
 
-      const valuesArray = [localData.search_query, day.forecast, day.time];
+      const valuesArray = [localData.search_query, day.forecast, day.time, day.created_at];
       client.query(sqlQueryInsert, valuesArray);
-      console.log('accessing values array', valuesArray);
+      // console.log('accessing values array', valuesArray);
     })
       
 
@@ -156,6 +195,13 @@ app.get('/events', getEvents)
 
 function getEvents(request, response){
 
+  //check database for data
+  //client.query('query message/string', [data in array format])
+  
+  //  then check the if statements
+if('there is no data'){
+
+
   let eventData = request.query.data;
 
   const urlfromEventbrite = `https://www.eventbriteapi.com/v3/events/search/?sort_by=date&location.latitude=${eventData.latitude}&location.longitude=${eventData.longitude}&token=${process.env.EVENTBRITE_API_KEY}`;
@@ -168,37 +214,33 @@ function getEvents(request, response){
     const formattedEvents = eventbriteData.map(event => new Event(event.url, event.name.text, event.start.local, event.description.text));
 
     response.send(formattedEvents);
+
+    //add data to the db
+    //client.query('query string', [array of values])
+
   }).catch(error => {
     response.status(500).send(error.message);
     console.error(error);
   })
-  function Event (link, name, event_date, summary){
-    this.link = link;
-    this.name = name;
-    this.event_date = new Date(event_date).toDateString();
-    this.summary = summary;
-  }
+ 
+
+
+}else{
+  'use the data that exists in the db'
+
+}
+
 }
 
 // ====================================
 
+function Event (link, name, event_date, summary){
+  this.link = link;
+  this.name = name;
+  this.event_date = new Date(event_date).toDateString();
+  this.summary = summary;
+}
+
 app.listen(PORT, () => {
   console.log(`app is running on ${PORT}`);
 });
-
-
-// class notes
-
-// API is a server that lives on the internet. Places where code lives.
-//1. Go to google api console developer website.
-// 2. Copy URL in Postman and in server.js under /location
-// 3. install superagent = require('superagent') ---> NOT EXPRESS (recieves http request, ears of operation). SUPERAGENT is the mouth, it talks to the internet over http.
-// 4. rnpm install -S superagent
-//5. superagent.get('url from string')
-//......
-//10. The dynamic part of the code is in the addess.
-
-
-//lab tomorrow
-//1. Get location (just did in class) and weather and eventbite data from the internet.
-//2. Trello board has everything I need for days instructions.

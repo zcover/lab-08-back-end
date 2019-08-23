@@ -16,7 +16,8 @@ CREATE TABLE weather (
    /* get data from constructor function */
    search_query VARCHAR(255),
    forecast VARCHAR(255),
-   time VARCHAR(255)
+   time VARCHAR(255),
+   created_at BIGINT
    );
 
 DROP TABLE IF EXISTS events;
@@ -25,5 +26,6 @@ CREATE TABLE events (
    id SERIAL PRIMARY KEY,
    name VARCHAR(255),
    event_date VARCHAR(255),
+
    summary TEXT
    );
