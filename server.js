@@ -1,5 +1,9 @@
 'use strict'
 
+
+
+//updated constructor function to have the time of right now.
+
 //require() is an import statement built into node.js - it reads complex files.
 const express = require('express');
 const cors = require('cors');
@@ -35,6 +39,7 @@ function Location(query, format, lat, lng) {
 function Day (summary, time) {
   this.forecast = summary;
   this.time = new Date(time *1000).toDateString();
+  this.created_at = Date.now();
 }
 //
 
@@ -109,6 +114,12 @@ app.get('/location', (request, response) => {
     // =========== TARGET WEATHER from API ===========
     
 app.get('/weather', getWeather)
+  //does data exist
+  //is it too old? => new data
+  //if not => give to front end
+  //doesn't exist => get new data
+
+
   function getWeather(request, response){
   // console.log(request);
 
@@ -117,12 +128,26 @@ app.get('/weather', getWeather)
   
   client.query(`SELECT * FROM weather WHERE search_query=$1`, [localData.search_query]).then(sqlResult => {
 
-  //found stuff in database
-    if(sqlResult.rowCount > 0){
+
+    let notTooOld = true;
+    if(sqlResult.rowcount > 0){
+      const age = sqlResult.rows[0].created_at; //15000000
+      const ageInSeconds = (Date.now() - age) / 1000; //15000
+      console.log('age in seconds', notTooOld);
+    }
+
+    
+    //found stuff in database
+    if(sqlResult.rowCount > 0 && notTooOld){
+      //check if the existing code is old
+
+
       console.log('found weather stuff in databse')
       response.send(sqlResult.rows[0]);
       // console.log(sqlResult.rows);
 
+
+    //didn't find stuff or too old 
     }else {
       console.log('did not find in database, googling now!');
 
@@ -140,11 +165,11 @@ app.get('/weather', getWeather)
       formattedDays.forEach(day => {
 
         const sqlQueryInsert = `INSERT INTO weather
-      (search_query, forecast, time)
+      (search_query, forecast, time, created_at)
       VALUES
-      ($1, $2, $3)`;
+      ($1, $2, $3, $4)`;
 
-      const valuesArray = [localData.search_query, day.forecast, day.time];
+      const valuesArray = [localData.search_query, day.forecast, day.time, day.created_at];
       client.query(sqlQueryInsert, valuesArray);
       // console.log('accessing values array', valuesArray);
     })
